@@ -1,0 +1,414 @@
+---
+title: "InsurrApp"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    social: menu
+    logo: logo3.png
+    theme: journal
+    storyboard: TRUE
+runtime: shiny 
+---
+
+ 
+```{r setup, include=FALSE}
+
+# Loading Packages
+library(flexdashboard)
+library(shiny)
+library(shinythemes)
+library(e1071)
+library(caret)
+
+# For adding code link to the app
+# source_code: embed # For adding source codes 
+
+```
+
+```{r}
+# For changing the theme of the map
+#themeSelector()
+```
+
+```{r}
+# Loading dataset
+insuranceDT <- read.csv("insurance.csv")
+
+insuranceDT2 <- insuranceDT
+
+```
+
+Insurance Charges Prediction {.storyboard data-navmenu="Menu"}
+===============================================================================
+
+Data Entry Panel {.sidebar data-width=350}
+-------------------------------------------------------------------------------
+**Customer Data Entry Panel**
+
+
+```{r}
+# Data preparation and Preprocessing of the train dataset
+insuranceDT['sex'] <- sapply(insuranceDT[,"sex"], function(y){ifelse(y=="female",1,0)})
+
+insuranceDT['smoker'] <- sapply(insuranceDT[,"smoker"], function(z){ ifelse(z=="yes",1,0)})
+
+insuranceDT['region'] <-  sapply(insuranceDT[,'region'], function(x){
+  if(x=='southwest'){
+    x = 1
+  }else if(x=='southeast'){
+    x=2
+  }else if(x=='northwest'){
+    x=3
+  }else{
+    x=4
+  }
+
+}) 
+
+# Data Splitting
+set.seed(100)
+insurance_index <- createDataPartition(insuranceDT$charges, p=0.8, list=FALSE)
+train_insurance <- insuranceDT[insurance_index,]
+test_insurance <- insuranceDT[-insurance_index,]
+
+x_train <-  train_insurance[,c(1:6)]
+y_train <- train_insurance[,c(7)]
+x_test <- test_insurance[,c(1:6)]
+y_test <- test_insurance["charges"]
+
+
+```
+
+
+```{r}
+# Customer's name entry
+textInput("name",label = "Customer's Name", placeholder ="Enter Customer Name")
+
+numericInput("age", label ="Age",value = 1, min = 1, max = 1000 )
+#numericInput("sex", label ="Sex",value = 0, min = 0, max = 1 )
+selectInput("sex", label = "Sex",choices = c("male","female"))
+
+numericInput("bmi", label ="Body Mass Index (BMI)",value = 1, min = 1, max = 1000)
+
+numericInput("children", label ="Number of Children",value = 0, min = 0, max = 1000)
+
+#numericInput("region", label ="Region",value = 1, min = 1, max = 4)
+selectInput("region", label ="Region",choices = c("southwest","southeast","northwest","northeast"))
+#selectInput("region", label ="Region",choices = insuranceDT$region)
+
+#numericInput("smoker", label ="Smoking Status",value = 0, min = 0, max = 1 )
+selectInput("smoker", label ="Smoking Status",choices = c("yes","no") )
+
+
+#submitButton("Submit") 
+actionButton("submit", "Submit")
+
+# Data preparation and Preprocessing of user input data
+## Converting sex, smoker status and region variables from factor to numeric
+sex1 <- reactive({
+  sex2 <- sapply(input$sex, function(y){ifelse(y=="female",1,0)})
+  return(sex2)
+}) 
+
+smoker1 <-reactive({
+  smoker2 <- sapply(input$smoker , function(z){ ifelse(z=="yes",1,0)})
+  return(smoker2)
+})  
+
+region1 <-  reactive({
+  
+  region2 <- sapply(input$region, function(x){
+    if(x=='southwest'){
+      x = 1
+    }else if(x=='southeast'){
+      x=2
+    }else if(x=='northwest'){
+      x=3
+    }else{
+      x=4
+    }
+    
+  }) 
+  return(region2)
+}) 
+ 
+userdata_function <- reactive({
+  if(input$submit>0){
+  #userDT <- data.frame(col1=c(input$age),col2=c(input$sex),col3=c(input$bmi),col4=c(input$children),col5=c(input$smoker),col6=c(input$region))
+  userDT <- data.frame(col1=c(input$age),col2=c(sex1()),col3=c(input$bmi),col4=c(input$children),col5=c(smoker1()),col6=c(region1()))
+  
+  colnames(userDT) <- colnames(x_test) # changing the columns names of userDT to conform with insuranceDT
+  return(userDT)
+  }
+  
+})
+
+# Model training
+set.seed(100)
+insurance_model <- reactive({
+  lm1 <- lm(charges~., data = train_insurance)
+  return(lm1)
+})  
+
+# Using the model to predict customer data
+model_pred <- reactive({
+  pred <- round(predict(insurance_model(),userdata_function()),2)
+  #pred <- round(pred, 2)
+  return(pred)
+})
+
+  
+
+```
+
+
+### CUSTOMER CHARGES SECTION
+
+```{r}
+
+renderText({
+  if(input$submit==0){
+    paste("Enter applicant data to obtain charges.")
+  }else if(model_pred()<0){
+    paste("No prediction make! Check customer's details entered")
+    
+  }else{
+      paste(input$name, "insurance charges is : #", model_pred())
+      }
+})
+    
+```
+
+Insurance Data EDA {.storyboard data-navmenu="Menu"}
+===============================================================================
+
+EDA Panel {.sidebar data-width=350}
+-------------------------------------------------------------------------------
+**Exploratory Data Analysis Panel**
+
+*EDA is the section that contains analysis of the customers dataset to obtain insights on the distribution of their ages, BMI and charges, outliers in the customers age, BMI and charges, and the relationship between customer's age and charges*
+
+### Boxplots of Customers Ages
+
+```{r}
+# Boxplot to check outliers in smoker status, sex and region based on age
+renderPlot({
+  par(mfrow=c(1,3))
+
+  boxplot(insuranceDT2$age~insuranceDT2$smoker, main="Boxplot of Age against Smoker",xlab ="Smoker", ylab = "Age", col=c("blue","green"))
+  boxplot(insuranceDT2$age~insuranceDT2$region, main="Boxplot of Age against Region",xlab ="Region", ylab = "Age", col=c("blue","green","orange","red"))
+  boxplot(insuranceDT2$age~insuranceDT2$sex, main="Boxplot of Age against Smoker",xlab ="Sex", ylab = "Age", col=c("green","red"))
+})
+
+```
+
+### Boxplots of Customers BMI
+
+```{r}
+# Boxplot to check outliers in smoker status, sex and region based on bmi
+renderPlot({
+  par(mfrow=c(1,3))
+  
+  boxplot(insuranceDT2$bmi~insuranceDT2$smoker, main="Boxplot of BMI against Smoker",xlab ="Smoker", ylab = "BMI", col=c("blue","green"))
+  boxplot(insuranceDT2$bmi~insuranceDT2$region, main="Boxplot of BMI against Region",xlab ="Region",ylab = "BMI", col=c("blue","green","orange","red"))
+  boxplot(insuranceDT2$bmi~insuranceDT2$sex, main="Boxplot of BMI against Smoker",xlab ="Sex", ylab = "BMI", col=c("green","red"))
+})
+
+```
+
+
+### Histogram Plots of Continuous Variables
+
+```{r}
+# Histogram Plot of continuous variables
+renderPlot({
+  par(mfrow=c(1,3))
+  hist(insuranceDT2$age, main ="Distribution of Ages", ylab = "Frequency",xlab ="Age",col ="blue")
+  hist(insuranceDT2$bmi,main ="Distribution of BMI", ylab = "Frequency",xlab ="BMI", col ="orange")
+  hist(insuranceDT2$charges, main ="Distribution of Charges", ylab = "Frequency",xlab ="Charges",col = "red")
+})
+
+```
+
+### Density Plots of Continuous Variables
+
+```{r}
+# Density Plot of continuous variables
+renderPlot({
+  par(mfrow=c(1,3))
+  plot(density(insuranceDT2$age), main="Density Plot: Age", ylab="Frequency", sub=paste("Skewness:", round(skewness(insuranceDT2$age), 2)))  # density plot for 'age'
+  polygon(density(insuranceDT2$age), col="blue")
+  
+  plot(density(insuranceDT2$bmi), main="Density Plot: BMI", ylab="Frequency", sub=paste("Skewness:", round(skewness(insuranceDT2$bmi), 2)))  # density plot for 'age'
+  polygon(density(insuranceDT2$bmi), col="orange")
+  
+  plot(density(insuranceDT2$charges), main="Density Plot: Charges", ylab="Frequency", sub=paste("Skewness:", round(skewness(insuranceDT2$charges), 2)))  # density plot for 'charges'
+  polygon(density(insuranceDT2$charges), col="red")
+})
+
+```
+
+
+### Scatter Plots of Charges Against Ages of Customers
+
+```{r}
+renderPlot({
+  par(mfrow=c(1,2))
+  plot(x=insuranceDT2$age, y=insuranceDT2$charges, main ="Scatter Plot of Charges Against Age", ylab ="Charges", xlab = "Age", col="blue")
+  scatter.smooth(x=insuranceDT2$age, y=insuranceDT2$charges, main ="Scatter Plot of Charges against Age with Linear Line", ylab ="Charges", xlab = "Age", col="red")
+})
+
+```
+
+
+About{data-navmenu="Menu"}
+===============================================================================
+
+**ABOUT**
+
+*InsurrApp is an insurance pricing platform that used both machine learning and predictive analytics to predicts medical insurance costs of customers using their information such as age, number of children, BMI, Smoking status, region and sex.*
+
+*The datasets used in building model that this platform makes prediction with was gotten from https://www.kaggle.com/mirichoi0218/insurance*
+
+**Applications of InsurrApp **
+
+*The same algorithm and concept used in building the model used in InsurrApp can also be use in the following sectors:*
+
+* *Insurance - To predicts the prices of insurance package to clients*
+* *HMO - To predicts the medical charges of customers.*
+* *Hospitals - To predicts the costs medical treatments.*
+* *Fitness Firms - To predict the costs of service to clients.*
+
+**The essence of this project are as follow: **
+
+* *To showcase my ability of using both Flexdashboard and shiny (R packages) for building an interactive web application.*
+* *To build model which predicts the cost of medical insurance using customers information input into the model.*
+* *To improve and showcase my machine learning and predictive analytics skills.*
+* *To apply my analytics and design thinking skills in solving real life problems such as insurance pricing, medical charges etc.*
+
+
+Projects Portfolio{data-navmenu="Menu"}
+===============================================================================
+
+**PROJECTS PORTFOLIO**
+
+*Below are links to my projects:*
+
+* *https://phorus2.shinyapps.io/PhorusRecommender1/ *
+* *https://phorus2.shinyapps.io/InsurrApp/*
+* *https://phorus.shinyapps.io/Afriloan2/*
+* *https://phorus.shinyapps.io/NigeriaTelecomDashboard/*
+* *https://jhonsphorus.shinyapps.io/timeseries_app/*
+* *https://jhonsphorus1.shinyapps.io/TSForecastApp/*
+* *https://jhonsphorus.shinyapps.io/plotboxapp/*
+* *https://jhonsphorus.shinyapps.io/regapp/*
+* *https://phorus.shinyapps.io/flexdashboard_fill/*
+* *https://jhonsphorus.shinyapps.io/temperature_converter/*
+* *https://jhonsphorus.shinyapps.io/calculator/*
+* *https://jhonsphorus1.shinyapps.io/NBA_Player_Dashboard/*
+* *https://jhonsphorus1.shinyapps.io/AfriCol/*
+* *https://jhonsphorus1.shinyapps.io/flexdashboard_guage2/*
+* *https://jhonsphorus1.shinyapps.io/Nigeria_Population_dashboard/*
+* *https://phorus.shinyapps.io/RecommendationApp/*
+* *https://phorus.shinyapps.io/flexdashboard_fill/*
+* *https://phorus.shinyapps.io/AfriLoan/*
+
+
+Contact-us{.storyboard data-navmenu=""}
+===============================================================================
+ 
+Contact Sidebar {.sidebar data-width=300}
+----------------------------------------------
+
+**Get in touch with us for your next analytics project**
+
+
+```{r}
+textInput(inputId ="name2", label = "",placeholder = "Full Name*" )
+textInput("company", label = "",placeholder = "Company")
+textInput(inputId ="email", label = "",placeholder = "Email*" )
+textInput("phone",label="",placeholder = "Phone" )
+textInput(inputId ="subject", label = "",placeholder = "Subject*" )
+#textInput(inputId ="message", label = "",placeholder = "Message*" )
+textAreaInput(inputId ="message", label = "",placeholder = "Message*")
+actionButton("submit2", "Submit") 
+
+```
+
+
+```{r}
+
+useroutput <- eventReactive(input$submit2,{
+  if(input$name2 != "" & input$company!= "" & input$email!= "" & input$phone!= "" & input$subject != "" & input$message != ""  ){
+    userData <- data.frame(input$name2,input$company,input$email,input$phone,input$subject,input$message)
+    colnames(userData) <- c("Name","Company","Email","Phone","Subject","Message")
+  }
+  return(userData)
+})
+
+```
+
+### Contact
+
+```{r}
+img(src="email1.png", height=20, width=20)
+
+```
+
+b.adejohnson@hotmail.com
+
+
+```{r}
+img(src="phone1.png", height=20, width=20)
+
+```
+
++2349099921571
+
+```{r}
+img(src="twitter.png", height=20, width=20)
+
+```
+
+@jhonsphorus
+
+```{r}
+
+img(src="linkedin.png", height=20, width=20)
+
+```
+
+https://www.linkedin.com/in/johnson-adebayo/
+
+```{r}
+userData <- read.csv("userentry.csv")
+
+
+renderTable({
+  
+  userData <- rbind(userData, useroutput())
+  
+  # To remove the old "userentry.csv" file
+  file.remove("userentry.csv")
+  # To write and replace the old "userentry.csv" file
+  write.csv(userData,"userentry.csv", row.names = FALSE)
+  #write.csv(useroutput(),"userentry.csv", row.names = FALSE)
+  #useroutput()
+})
+
+```
+
+```{r}
+#drive_auth()  
+
+#drive_put(media ="C:/Users/usewr/Documents/RProject/Personal_Practice_New/Afriloan/userentry.csv",path = as_id("1G-TakNykaTlaeJtxFd9Q5xf98Bj3ihg4"),name ="USERDATA3",type ="spreadsheet")
+
+```
+
+
+
+```{r}
+#rmarkdown::run("InsurrApp.Rmd")
+
+```

@@ -1,0 +1,12 @@
+name: InsurrApp
+title: InsurrApp
+username:
+account: phorus2
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2691429
+bundleId: 3539987
+url: https://phorus2.shinyapps.io/InsurrApp/
+when: 1597969858.63827
+asMultiple: TRUE
+asStatic: FALSE
